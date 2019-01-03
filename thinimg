@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# This is anypaste-thinimg, released under the GPLv3
+# Authored by markasoftware, see markasoftware.com
+
+# Our plugin will be run with a different first argument depending on what Core
+# wants us to do
+case $1 in
+    check_eligibility)
+        # For check_eligibility, we check whether our plugin is compatible with the file.
+        # The absolute file path is in environment variable $ap_path, and the mime type in $ap_mime
+        # The exit code is used to determine compatibility: 0 = compatible, anything else = incompatible
+        # Lets assume that thinimg can handle any MIME type starting with image/
+	# Realistically, we should probably be checking $ap_ffprobe as well, since it's more accurate. Check
+	# out the builtin plugins if you care.
+        [[ $ap_mime == image/* ]]
+        ;;
+    upload)
+        # For upload, we upload the file. Environment variables are the same as for check_eligibility
+        # thinimg expects us to upload the file as a form-field, then 302 redirects us to the link.
+        # Curl options: -# is progress bar, -f is fail on bad HTTP response codes,
+        # and -D is dump response headers to specified file (stdout here)
+        # We specify mime type explicitly because curl often doesn't detect it well
+        # if stdout is a terminal
+        thin_headers=$(curl -#fF "img[]=@$ap_path;type=$ap_mime" -D - 'http://thinimg.com/') ||
+            { echo 'ERROR: Upload request did not return HTTP 200!' >&2 && exit 1; }
+        # Now, lets parse out the response URL. It's the only url in the response headers that starts
+        # with http://i.thinimg.com/img/, so we just grep for a string starting with that
+        thin_link=$(echo "$thin_headers" | grep -o 'http://i\.thinimg\.com/img/[a-zA-Z0-9.]*')
+	# Most sites have the links in the normal request body, and as json. There is a crappy json parser function
+	# in Anypaste core you might want to copy-paste into your plugin sometimes.
+        echo ''
+        echo "Direct Link: $thin_link"
+        echo ''
+        ;;
+    # For plugins that have required configuration options, you'd also want a get_required_config
+    # part of this case statement, which would send a newline-separated list of required config options
+    # to stdout.
+esac
